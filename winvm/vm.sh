@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the Windows VM: test MinGW builds from docker/mingw/build.sh, or build
+# Run the Windows VM: test MinGW builds from mingw/build.sh, or build
 # CMake_DLL with MSVC inside it.
 #
 # The base image is never modified: the VM always runs on a copy-on-write
@@ -23,13 +23,13 @@
 #   OUT_DIR    where build artifacts go          (default: <repo>/out/windows)
 #   TEST_DIR   what 'test' copies into the VM    (default: <repo>/out/mingw)
 #   ACCEL      kvm or tcg (default: kvm if /dev/kvm is usable, else tcg)
-#   QEMU       QEMU binary (default: qemu-system-x86_64 with kvm, ./qemu-docker.sh with tcg)
+#   QEMU       QEMU binary (default: qemu-system-x86_64 with kvm, qemu-docker/qemu-docker.sh with tcg)
 #   BOOT_TIMEOUT  seconds to wait for ssh      (default: 600 with kvm, 3600 with tcg)
 #   KEEP=1     with 'build'/'test': leave the VM running afterwards
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="$(cd "$HERE/../.." && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
 
 IMAGE="${IMAGE:-$HERE/output/cmake-dll-win.qcow2}"
 RUN_DIR="$HERE/.run"
@@ -55,7 +55,7 @@ case "$ACCEL" in
 esac
 if [[ "$ACCEL" == tcg ]]; then BOOT_TIMEOUT="${BOOT_TIMEOUT:-3600}"; else BOOT_TIMEOUT="${BOOT_TIMEOUT:-600}"; fi
 # Host QEMU 6.2 crashes Windows under TCG, so TCG runs QEMU 10 from Docker.
-if [[ "$ACCEL" == tcg ]]; then QEMU="${QEMU:-$HERE/qemu-docker.sh}"; else QEMU="${QEMU:-qemu-system-x86_64}"; fi
+if [[ "$ACCEL" == tcg ]]; then QEMU="${QEMU:-$HERE/qemu-docker/qemu-docker.sh}"; else QEMU="${QEMU:-qemu-system-x86_64}"; fi
 
 SSH_OPTS=(-i "$KEY" -p "$SSH_PORT"
           -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
@@ -87,7 +87,7 @@ wait_for_ssh() {
 
 cmd_start() {
     if is_running; then log "VM already running (pid $(cat "$PIDFILE"))."; return; fi
-    [[ -f "$IMAGE" ]] || die "base image not found: $IMAGE (run ./build-image.sh, or set IMAGE=...)"
+    [[ -f "$IMAGE" ]] || die "base image not found: $IMAGE (run ./winvm/build-image.sh, or set IMAGE=...)"
     [[ -f "$KEY" ]]   || die "ssh key not found: $KEY (it is created by ./build-image.sh)"
     mkdir -p "$RUN_DIR"
     if [[ ! -f "$OVERLAY" ]]; then
@@ -98,7 +98,7 @@ cmd_start() {
     [[ -n "${VNC:-}" ]] && display+=(-vnc "127.0.0.1:${VNC}")
 
     log "Starting VM (accel=$ACCEL, cpus=$VM_CPUS, memory=${VM_MEMORY}M, ssh=127.0.0.1:$SSH_PORT)"
-    # Devices must match windows.pkr.hcl: i440fx machine, IDE disk, e1000 NIC.
+    # Devices must match packer/windows.pkr.hcl: i440fx machine, IDE disk, e1000 NIC.
     # Not -daemonize: qemu-docker.sh must stay in the foreground of its container.
     nohup "$QEMU" \
         -name cmake-dll-win \
@@ -157,11 +157,11 @@ cmd_build() {
 
     log "Packing sources"
     tar -C "$REPO" -cf "$tmp/src.tar" \
-        --exclude=./.git --exclude=./build --exclude=./out --exclude=./qemu \
+        --exclude=./.git --exclude=./build --exclude=./out --exclude=./mingw --exclude=./winvm --exclude=./docs \
         .
 
     log "Copying sources into the VM"
-    scp "${SCP_OPTS[@]}" "$tmp/src.tar" "$HERE/scripts/guest-build.ps1" "$TARGET:"
+    scp "${SCP_OPTS[@]}" "$tmp/src.tar" "$HERE/guest/guest-build.ps1" "$TARGET:"
 
     log "Building ($config) inside the VM"
     vm_ssh "powershell -NoProfile -ExecutionPolicy Bypass -File guest-build.ps1 -Config $config"
@@ -175,7 +175,7 @@ cmd_build() {
 }
 
 cmd_test() {
-    compgen -G "$TEST_DIR/*.exe" >/dev/null || die "no .exe in $TEST_DIR (run ./docker/mingw/build.sh first)"
+    compgen -G "$TEST_DIR/*.exe" >/dev/null || die "no .exe in $TEST_DIR (run ./mingw/build.sh first)"
 
     BUILD_TMP=$(mktemp -d)
     STARTED_BY_BUILD=0
@@ -190,7 +190,7 @@ cmd_test() {
 
     log "Copying $TEST_DIR into the VM"
     tar -C "$TEST_DIR" -cf "$tmp/test.tar" .
-    scp "${SCP_OPTS[@]}" "$tmp/test.tar" "$HERE/scripts/guest-test.ps1" "$TARGET:"
+    scp "${SCP_OPTS[@]}" "$tmp/test.tar" "$HERE/guest/guest-test.ps1" "$TARGET:"
 
     log "Running ThreadDemo.exe inside the VM"
     vm_ssh "powershell -NoProfile -ExecutionPolicy Bypass -File guest-test.ps1"

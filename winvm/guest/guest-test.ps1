@@ -1,5 +1,5 @@
 # Runs inside the VM (copied there by vm.sh test). Unpacks the MinGW build
-# output from docker/mingw/build.sh and runs the demo on real Windows.
+# output from mingw/build.sh and runs the demo on real Windows.
 $ErrorActionPreference = 'Stop'
 
 $dir = 'C:\work\test'

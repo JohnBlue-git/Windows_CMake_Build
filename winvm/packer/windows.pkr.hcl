@@ -2,11 +2,11 @@
 // QEMU qcow2 disk, then installs OpenSSH and (build "qemu.msvc") VS 2022 C++
 // Build Tools + CMake. Build "qemu.base" skips the toolchain: enough to run
 // MinGW builds (vm.sh test).
-// Works with the stock Microsoft ISO or with the custom ISO from iso-kit/
+// Works with the stock Microsoft ISO or with the custom ISO from ../iso-kit/
 // (which already installs the toolchain during Setup; the provisioner then
 // only verifies it).
 //
-// Normally run through ./build-image.sh, which checks prerequisites and fills
+// Normally run through ../build-image.sh, which checks prerequisites and fills
 // in the variables below.
 
 packer {
@@ -98,7 +98,7 @@ variable "cpu_model" {
 variable "qemu_binary" {
   type        = string
   default     = "qemu-system-x86_64"
-  description = "QEMU binary; build-image.sh uses ./qemu-docker.sh (QEMU 10) for tcg."
+  description = "QEMU binary; build-image.sh uses qemu-docker/qemu-docker.sh (QEMU 10) for tcg."
 }
 
 variable "winrm_timeout" {
@@ -148,7 +148,7 @@ source "qemu" "windows" {
       product_key    = var.product_key
     })
   }
-  floppy_files = ["${path.root}/scripts/setup-winrm.ps1"]
+  floppy_files = ["${path.root}/provision/setup-winrm.ps1"]
 
   boot_wait    = "2s"
   boot_command = ["<spacebar><wait><spacebar>"]
@@ -178,12 +178,12 @@ build {
   }
 
   provisioner "powershell" {
-    scripts = ["${path.root}/scripts/install-openssh.ps1"]
+    scripts = ["${path.root}/provision/install-openssh.ps1"]
   }
 
   provisioner "powershell" {
     only    = ["qemu.msvc"]
-    scripts = ["${path.root}/scripts/install-buildtools.ps1"]
+    scripts = ["${path.root}/provision/install-buildtools.ps1"]
   }
 
   provisioner "windows-restart" {
@@ -193,6 +193,6 @@ build {
 
   provisioner "powershell" {
     only    = ["qemu.msvc"]
-    scripts = ["${path.root}/scripts/verify-toolchain.ps1"]
+    scripts = ["${path.root}/provision/verify-toolchain.ps1"]
   }
 }

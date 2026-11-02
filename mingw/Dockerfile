@@ -1,5 +1,5 @@
 # Fixed Linux build environment: CMake + Ninja + MinGW-w64 (posix threads).
-# Used by docker/mingw/build.sh; the repo is bind-mounted at /src.
+# Used by mingw/build.sh; the repo is bind-mounted at /src.
 FROM ubuntu:24.04
 
 RUN apt-get update \

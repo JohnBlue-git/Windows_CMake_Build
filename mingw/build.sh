@@ -3,17 +3,17 @@
 # Runs on a Linux host without KVM; output goes to out/mingw/.
 #
 # Usage:
-#   ./docker/mingw/build.sh [Release|Debug|RelWithDebInfo|MinSizeRel]
+#   ./mingw/build.sh [Release|Debug|RelWithDebInfo|MinSizeRel]
 #
 # Environment overrides:
 #   IMAGE    docker image tag          (default: cmake-dll-mingw)
 #   OUT_DIR  where artifacts are copied (default: <repo>/out/mingw)
 #
-# Then run the result on Windows:  ./qemu/windows/vm.sh test
+# Then run the result on Windows:  ./winvm/vm.sh test
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="$(cd "$HERE/../.." && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
 
 CONFIG="${1:-Release}"
 IMAGE="${IMAGE:-cmake-dll-mingw}"

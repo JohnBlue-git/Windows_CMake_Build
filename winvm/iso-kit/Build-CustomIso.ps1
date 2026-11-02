@@ -390,7 +390,7 @@ try {
     Write-Info "SHA-256:  $hash"
     Write-Info "Manifest: $manifestPath"
     Write-Info 'Copy all three files to the Linux host, e.g.:'
-    Write-Info "  scp `"$OutputIso`" `"$OutputIso.sha256`" `"$manifestPath`" yujen@192.168.11.76:~/CMake_DLL/qemu/windows/iso/"
+    Write-Info "  scp `"$OutputIso`" `"$OutputIso.sha256`" `"$manifestPath`" yujen@192.168.11.76:~/Windows_CMake_Build/winvm/iso/"
 }
 catch {
     Write-Host "`nFAILED: $($_.Exception.Message)" -ForegroundColor Red

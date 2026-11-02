@@ -1,6 +1,6 @@
 # Newer QEMU for hosts without KVM. QEMU 6.2 (Ubuntu 22.04) crashes Windows
 # Setup under TCG (SYSTEM_THREAD_EXCEPTION_NOT_HANDLED); QEMU 10 does not.
-# Used by qemu/windows/qemu-docker.sh.
+# Used by winvm/qemu-docker/qemu-docker.sh.
 FROM debian:trixie-slim
 
 RUN apt-get update \

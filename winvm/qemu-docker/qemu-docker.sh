@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Drop-in replacement for qemu-system-x86_64 that runs QEMU 10 from Docker
-# (docker/qemu/Dockerfile). vm.sh and build-image.sh use it for TCG, because the
+# (Dockerfile next to this script). vm.sh and build-image.sh use it for TCG, because the
 # host's QEMU 6.2 crashes Windows Setup without KVM.
 #
 # The container uses the host network (VNC, ssh/WinRM forwards stay on
@@ -13,7 +13,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMAGE="${QEMU_DOCKER_IMAGE:-cmake-dll-qemu}"
 
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-    docker build -q -t "$IMAGE" "$HERE/../../docker/qemu" >&2
+    docker build -q -t "$IMAGE" "$HERE" >&2
 fi
 
 dirs=("$PWD" /tmp)

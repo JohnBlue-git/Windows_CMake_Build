@@ -1,7 +1,7 @@
-# Custom Windows Server 2022 ISO for CMake_DLL
+# Custom Windows Server 2022 ISO for Windows_CMake_Build
 
-This kit turns the stock Windows Server 2022 ISO into a build-ready ISO for
-CMake_DLL. You run it on a Windows PC with only built-in tools (DISM) plus
+The kit lives in [`winvm/iso-kit/`](../winvm/iso-kit/). It turns the stock Windows Server 2022 ISO into a build-ready ISO for
+Windows_CMake_Build. You run it on a Windows PC with only built-in tools (DISM) plus
 `oscdimg` from the Windows ADK, similar to what NTLite does. The custom ISO
 then goes to the Linux host (192.168.11.76), where Packer turns it into the
 QEMU disk image.
@@ -34,7 +34,7 @@ flowchart LR
         C[Build-CustomIso.ps1<br/>DISM: export / debloat / embed<br/>oscdimg: ISO] --> D[CMakeDLL-WS2022-custom.iso<br/>+ .sha256 + .manifest.json]
     end
     subgraph HOST["Linux host 192.168.11.76"]
-        D -- scp --> E[qemu/windows/iso/]
+        D -- scp --> E[winvm/iso/]
         E --> F[build-image.sh<br/>Packer + QEMU, KVM or TCG]
         F --> G[output/cmake-dll-win.qcow2<br/>golden base image]
         G --> H[vm.sh build<br/>overlay per run]
@@ -54,9 +54,9 @@ flowchart LR
 | 1. Prepare payload | Windows PC | `Prepare-Payload.ps1` | 15–40 min | `<WorkDir>\payload\` (~2.5 GB) |
 | 2. Inspect (optional) | Windows PC | `Build-CustomIso.ps1 -ListImages` / `-ListOnly` | 5 min | edition list / `<WorkDir>\report\*.csv` |
 | 3. Build ISO | Windows PC | `Build-CustomIso.ps1` | 30–60 min | `<WorkDir>\out\CMakeDLL-WS2022-custom.iso` (~6 GB) |
-| 4. Transfer | PC → .76 | `scp` | network bound | `qemu/windows/iso/` |
-| 5. Build VM image | .76 | `./qemu/windows/build-image.sh` | 45–90 min | `output/cmake-dll-win.qcow2` |
-| 6. Build project | .76 | `./qemu/windows/vm.sh build` | 2–3 min | `out/windows/` |
+| 4. Transfer | PC → .76 | `scp` | network bound | `winvm/iso/` |
+| 5. Build VM image | .76 | `./winvm/build-image.sh` | 45–90 min | `output/cmake-dll-win.qcow2` |
+| 6. Build project | .76 | `./winvm/vm.sh build` | 2–3 min | `out/windows/` |
 
 Stages 1–5 run once, and again only when you change the toolchain or Windows
 version. Stage 6 is the everyday command.
@@ -89,10 +89,10 @@ Get the kit, then allow its scripts **in each new PowerShell window** (the
 setting lasts only for that window; it changes nothing permanent):
 
 ```powershell
-git clone https://github.com/JohnBlue-firm/CMake_DLL.git
-cd CMake_DLL\qemu\windows\iso-kit
+git clone https://github.com/JohnBlue-git/Windows_CMake_Build.git
+cd Windows_CMake_Build\winvm\iso-kit
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-Get-ChildItem ..\..\.. -Recurse | Unblock-File
+Get-ChildItem ..\.. -Recurse | Unblock-File
 ```
 
 If you see "running scripts is disabled on this system", you skipped
@@ -253,27 +253,27 @@ ISO and the `.manifest.json` to recognize it as a custom ISO.
 ```powershell
 cd D:\isowork\out
 scp CMakeDLL-WS2022-custom.iso CMakeDLL-WS2022-custom.iso.sha256 CMakeDLL-WS2022-custom.manifest.json `
-    yujen@192.168.11.76:~/CMake_DLL/qemu/windows/iso/
+    yujen@192.168.11.76:~/Windows_CMake_Build/winvm/iso/
 ```
 
 On .76:
 
 ```sh
-cd ~/CMake_DLL/qemu/windows/iso && sha256sum -c CMakeDLL-WS2022-custom.iso.sha256
+cd ~/Windows_CMake_Build/winvm/iso && sha256sum -c CMakeDLL-WS2022-custom.iso.sha256
 ```
 
 ### Step 6: build the QEMU image and the project (on .76)
 
 ```sh
-cd ~/CMake_DLL
-./qemu/windows/build-image.sh       # picks iso/CMakeDLL-WS2022-custom.iso automatically
-./qemu/windows/vm.sh build          # -> out/windows/
+cd ~/Windows_CMake_Build
+./winvm/build-image.sh       # picks iso/CMakeDLL-WS2022-custom.iso automatically
+./winvm/vm.sh build          # -> out/windows/
 ```
 
 `build-image.sh` detects the manifest, selects image index 1, verifies the
 checksum, and runs Packer. Packer's `install-buildtools.ps1` sees that MSVC is
 already installed and skips the download, so the only network access during the
-VM build is the OpenSSH download. See [`../../README.md`](../../README.md) for
+VM build is the OpenSSH download. See [`winvm.md`](winvm.md) for
 details on `vm.sh`.
 
 ---
@@ -341,7 +341,7 @@ file next to your ISO matches the copy on the Linux host.
 | Artifact | Size | Store in | Why |
 |---|---|---|---|
 | This kit, Packer template, scripts | KB | **GitHub** (this repo) | Small and reviewable. They reproduce everything else. |
-| `payload.json`, `*.manifest.json` | KB | GitHub (optional, e.g. `qemu/windows/iso/manifests/`) | Records exactly what each ISO contains |
+| `payload.json`, `*.manifest.json` | KB | GitHub (optional, e.g. `winvm/iso/manifests/`) | Records exactly what each ISO contains |
 | Custom ISO + `.sha256` | ~6 GB | NAS / shared disk | Over GitHub's file limits, and contains Windows (license) |
 | `cmake-dll-win.qcow2` | ~10–15 GB | NAS / shared disk, read-only | Same reasons. `vm.sh` only reads it (`IMAGE=/nas/... ./vm.sh build`). |
 
@@ -374,7 +374,7 @@ Server comes from dropping the other editions, removing feature payloads, and
 
 | Symptom | Cause / fix |
 |---|---|
-| "running scripts is disabled on this system" | Run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force` in **that** window (it doesn't carry over to new windows), then `Get-ChildItem ..\..\.. -Recurse \| Unblock-File`. |
+| "running scripts is disabled on this system" | Run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force` in **that** window (it doesn't carry over to new windows), then `Get-ChildItem ..\.. -Recurse \| Unblock-File`. |
 | `Edition not found on the ISO` | Evaluation ISOs use other names. Run `-ListImages`, then pass `-ImageIndex 1` (Server Core). |
 | Build can't find the payload / "Missing ...tools" | `-WorkDir` differs between `Prepare-Payload.ps1` and `Build-CustomIso.ps1`. Use the same folder for both. |
 | `Remove-Item ... PCL5ERES.DLL ... access denied` on `mount\` | An earlier run was interrupted and left locked files. Run `.\Clean-Workdir.ps1 -WorkDir <dir>` (it takes ownership and deletes them). `Build-CustomIso.ps1` now does this itself. If it still fails, reboot and run it again. |

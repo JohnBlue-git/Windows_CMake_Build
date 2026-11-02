@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the Windows build-VM base image (qcow2) with Packer + QEMU.
+# Build the Windows VM base image (qcow2) with Packer (packer/) + QEMU.
 # Run once on the Linux host (e.g. 192.168.11.76); takes roughly 1-2 hours with
 # KVM. Without KVM it falls back to TCG (software emulation): expect many hours.
 #
@@ -23,7 +23,7 @@
 #   VM_CPUS / VM_MEMORY  resources used during the build
 #   ACCEL            kvm or tcg     (default: kvm if /dev/kvm is usable, else tcg)
 #   TOOLCHAIN=0      skip VS Build Tools (default: 1)
-#   QEMU             QEMU binary for tcg (default: ./qemu-docker.sh, QEMU 10 in Docker)
+#   QEMU             QEMU binary for tcg (default: qemu-docker/qemu-docker.sh, QEMU 10 in Docker)
 #   HEADLESS=false   show the QEMU window (otherwise watch via VNC 127.0.0.1:5900-5910)
 #   FORCE=1          overwrite an existing output/ directory
 set -euo pipefail
@@ -42,7 +42,7 @@ die() { echo "error: $*" >&2; exit 1; }
 
 # --- prerequisites -----------------------------------------------------------
 for cmd in packer qemu-system-x86_64 qemu-img ssh-keygen; do
-    command -v "$cmd" >/dev/null || die "'$cmd' not found. See qemu/README.md (host setup)."
+    command -v "$cmd" >/dev/null || die "'$cmd' not found. See docs/winvm.md (host setup)."
 done
 if [[ -z "${ACCEL:-}" ]]; then
     if [[ -r /dev/kvm && -w /dev/kvm ]]; then ACCEL=kvm; else ACCEL=tcg; fi
@@ -54,8 +54,8 @@ case "$ACCEL" in
 esac
 [[ -f "$ISO" ]] || die "Windows ISO not found: $ISO
 Either copy the custom ISO built by iso-kit/Build-CustomIso.ps1 to
-qemu/windows/iso/CMakeDLL-WS2022-custom.iso (see iso-kit/README.md), or save the
-stock Windows Server 2022 ISO as qemu/windows/iso/windows-server-2022.iso."
+winvm/iso/CMakeDLL-WS2022-custom.iso (see docs/iso-kit.md), or save the
+stock Windows Server 2022 ISO as winvm/iso/windows-server-2022.iso."
 
 if [[ -n "${WIN_ADMIN_PASSWORD:-}" && "$WIN_ADMIN_PASSWORD" =~ [\<\>\&\"\'] ]]; then
     die "WIN_ADMIN_PASSWORD must not contain < > & \" ' (it is embedded in XML)."
@@ -95,10 +95,11 @@ args=(
     -var "headless=${HEADLESS:-true}"
     -var "image_index=$image_index"
     -var "accelerator=$ACCEL"
+    -var "output_dir=$HERE/output"
 )
 # Host QEMU 6.2 crashes Windows Setup under TCG; qemu-docker.sh runs QEMU 10.
 [[ "$ACCEL" == tcg ]] && args+=(-var "cpu_model=max" -var "winrm_timeout=12h"
-                                -var "qemu_binary=${QEMU:-$HERE/qemu-docker.sh}")
+                                -var "qemu_binary=${QEMU:-$HERE/qemu-docker/qemu-docker.sh}")
 [[ -n "${WIN_IMAGE_NAME:-}"     ]] && args+=(-var "image_name=$WIN_IMAGE_NAME")
 [[ -n "${WIN_PRODUCT_KEY:-}"    ]] && args+=(-var "product_key=$WIN_PRODUCT_KEY")
 [[ -n "${WIN_ADMIN_PASSWORD:-}" ]] && args+=(-var "admin_password=$WIN_ADMIN_PASSWORD")
@@ -106,12 +107,12 @@ args=(
 [[ -n "${VM_MEMORY:-}"          ]] && args+=(-var "memory=$VM_MEMORY")
 force=(); [[ "${FORCE:-0}" == 1 ]] && force=(-force)   # 'packer validate' rejects -force
 
-packer init .
+packer init "$HERE/packer"
 if [[ "${TOOLCHAIN:-1}" == 0 ]]; then only=qemu.base; else only=qemu.msvc; fi
-packer validate -only="$only" "${args[@]}" .
-PACKER_LOG="${PACKER_LOG:-0}" packer build -only="$only" "${force[@]}" "${args[@]}" .
+packer validate -only="$only" "${args[@]}" "$HERE/packer"
+PACKER_LOG="${PACKER_LOG:-0}" packer build -only="$only" "${force[@]}" "${args[@]}" "$HERE/packer"
 
 echo
 echo "Base image ready: $HERE/output/cmake-dll-win.qcow2"
 qemu-img info "$HERE/output/cmake-dll-win.qcow2" | sed -n '1,6p'
-if [[ "${TOOLCHAIN:-1}" == 0 ]]; then echo "Next: ./vm.sh test"; else echo "Next: ./vm.sh build"; fi
+if [[ "${TOOLCHAIN:-1}" == 0 ]]; then echo "Next: ./winvm/vm.sh test"; else echo "Next: ./winvm/vm.sh build"; fi
