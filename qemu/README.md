@@ -1,6 +1,21 @@
-# QEMU build VM (Windows)
+# QEMU Windows VM
 
-This replaces the old `docker/` setup. A Packer template installs Windows Server
+The VM has two uses:
+
+- **Test MinGW builds** (main flow). `docker/mingw/build.sh` cross-compiles on
+  the Linux host; `vm.sh test` runs the output in the VM.
+- **Build with MSVC** inside the VM (`vm.sh build`). Optional and **not
+  verified** on the current host. The PowerShell scripts below install and run
+  the MSVC toolchain.
+
+| | MinGW testing (verified) | MSVC build (optional, not verified) |
+|---|---|---|
+| ISO | official evaluation ISO | custom ISO from `iso-kit/`, or official ISO |
+| Image build | `TOOLCHAIN=0 ./build-image.sh` | `./build-image.sh` |
+| Image contains | Windows + OpenSSH | + VS 2022 Build Tools, CMake |
+| Per run | `./vm.sh test` | `./vm.sh build` |
+
+A Packer template installs Windows Server
 2022 (Server Core) into a qcow2 disk without any manual steps, then installs the
 same toolchain the Windows Dockerfile used: VS 2022 C++ Build Tools and the
 CMake bundled with VS. It also installs OpenSSH so the host can copy sources in
@@ -16,9 +31,11 @@ qemu/windows/
 │   ├── install-openssh.ps1    sshd + host public key for Administrator
 │   ├── install-buildtools.ps1 VS 2022 Build Tools + CMake
 │   ├── verify-toolchain.ps1   fails the image build if cmake/MSVC are missing
-│   └── guest-build.ps1        runs inside the VM for each project build
+│   ├── guest-build.ps1        runs inside the VM for each MSVC build (vm.sh build)
+│   └── guest-test.ps1         runs inside the VM to test out/mingw (vm.sh test)
 ├── build-image.sh           one-time: ISO -> output/cmake-dll-win.qcow2
-└── vm.sh                    build / start / ssh / stop / reset
+├── qemu-docker.sh           runs QEMU 10 from Docker (docker/qemu/) when there is no KVM
+└── vm.sh                    test / build / start / ssh / stop / reset
 ```
 
 ## What goes in Git and what doesn't
@@ -51,10 +68,10 @@ IMAGE=/srv/vm-images/cmake-dll-win.qcow2 ./qemu/windows/vm.sh build
 ## Host setup (Ubuntu/Debian, e.g. 192.168.11.76)
 
 ```sh
-# QEMU + KVM
+# QEMU (+ KVM if the CPU supports it)
 sudo apt install -y qemu-system-x86 qemu-utils
 sudo usermod -aG kvm "$USER"        # log out/in afterwards
-ls -l /dev/kvm                      # must exist (VT-x/AMD-V enabled in BIOS)
+ls -l /dev/kvm                      # optional: without it, QEMU uses TCG
 
 # Packer (HashiCorp apt repo)
 wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
@@ -67,7 +84,12 @@ Disk space: about 40 GB free during the image build.
 
 ## 1. Get the Windows ISO
 
-**Recommended: custom ISO.** Build it on a Windows PC with
+**For MinGW testing: the official ISO.** Download **Windows Server 2022 (ISO,
+English, 64-bit)** from the Microsoft Evaluation Center and save it as
+`qemu/windows/iso/windows-server-2022.iso`. Git ignores `iso/`. No custom ISO
+is needed, because the VM only runs the EXE.
+
+**For MSVC (optional): custom ISO.** Build it on a Windows PC with
 [`windows/iso-kit`](windows/iso-kit/README.md). It contains one edition, has
 unneeded components removed, and installs MSVC, CMake and Ninja offline during
 Setup. The result is a ~6 GB ISO (built from the Server 2022 evaluation ISO).
@@ -76,10 +98,8 @@ Copy `CMakeDLL-WS2022-custom.iso` plus its `.sha256` and
 `cd qemu/windows/iso && sha256sum -c CMakeDLL-WS2022-custom.iso.sha256`.
 `build-image.sh` picks it up automatically.
 
-**Alternative: stock ISO.** Download **Windows Server 2022 (ISO, English,
-64-bit)** from the Microsoft Evaluation Center, or use your licensed media, and
-save it as `qemu/windows/iso/windows-server-2022.iso`. Packer then downloads
-and installs the Build Tools during the image build.
+You can also use the official ISO for MSVC. Packer then downloads and installs
+the Build Tools during the image build.
 
 If you use different media, check the image names inside it and pass the one
 you want:
@@ -93,18 +113,47 @@ WIN_IMAGE_NAME="Windows Server 2022 SERVERSTANDARDCORE" ./qemu/windows/build-ima
 ## 2. Build the base image (once)
 
 ```sh
-./qemu/windows/build-image.sh                # or: build-image.sh /path/to.iso
+TOOLCHAIN=0 ./qemu/windows/build-image.sh    # MinGW testing: Windows + OpenSSH
+./qemu/windows/build-image.sh                # MSVC (optional): + Build Tools
 ```
 
-This takes about 1–2 hours. Most of the time goes to Windows Setup and the
+`TOOLCHAIN=0` uses the official ISO and skips the Build Tools. Without it, the
+custom ISO is preferred if present. With KVM, the MSVC image takes about 1–2 hours. Most of the time goes to Windows Setup and the
 Build Tools download. The build runs headless. To watch it, connect a VNC
 viewer to the port Packer prints (127.0.0.1:59xx). From another machine, use an
 ssh tunnel: `ssh -L 5900:127.0.0.1:5900 yujen@192.168.11.76`.
 
 Useful overrides: `WIN_ISO_SHA256`, `WIN_PRODUCT_KEY`, `WIN_ADMIN_PASSWORD`,
-`VM_CPUS`, `VM_MEMORY`, `HEADLESS=false`, `FORCE=1`, `PACKER_LOG=1`.
+`VM_CPUS`, `VM_MEMORY`, `HEADLESS=false`, `FORCE=1`, `PACKER_LOG=1`,
+`ACCEL=kvm|tcg`.
 
-## 3. Build the project
+**Without KVM** (no `/dev/kvm`), `build-image.sh` and `vm.sh` use TCG software
+emulation with `-cpu max`, and run QEMU 10 from Docker through `qemu-docker.sh`.
+The host's QEMU 6.2 (Ubuntu 22.04) crashes Windows Setup under TCG with
+`SYSTEM_THREAD_EXCEPTION_NOT_HANDLED` about 50 s into boot, whatever the CPU
+model. Set `QEMU=qemu-system-x86_64` to use a host QEMU that is new enough.
+The first run builds the `cmake-dll-qemu` Docker image.
+
+Measured on the 192.168.11.76 host (no KVM, 8 vCPUs): `TOOLCHAIN=0`
+image build about 1 hour, `vm.sh test` about 5 minutes (boot, run,
+shutdown). `vm.sh` waits up to `BOOT_TIMEOUT` seconds for ssh (default 3600
+with TCG).
+
+## 3. Test a MinGW build
+
+```sh
+./docker/mingw/build.sh               # cross-compile on the host -> out/mingw/
+./qemu/windows/vm.sh test             # run out/mingw/ThreadDemo.exe in the VM
+```
+
+`vm.sh test` creates a fresh overlay, boots the VM, copies `out/mingw/` in
+(`TEST_DIR=...` to change it), runs `ThreadDemo.exe` with `guest-test.ps1`, and
+shuts the VM down. To test several builds without rebooting each time, run
+`vm.sh start` first; `test` then reuses the running VM and leaves it running.
+
+## 4. Optional: build the project with MSVC (not verified)
+
+Needs an image built without `TOOLCHAIN=0`.
 
 ```sh
 ./qemu/windows/vm.sh build            # Release; or: vm.sh build Debug

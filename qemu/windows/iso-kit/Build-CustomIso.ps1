@@ -377,7 +377,8 @@ try {
 
     $hash = (Get-FileHash -Algorithm SHA256 $OutputIso).Hash.ToLower()
     $isoName = Split-Path $OutputIso -Leaf
-    Set-Content -Encoding ASCII -Path "$OutputIso.sha256" -Value "$hash  $isoName"
+    # LF line ending + no BOM so `sha256sum -c` on Linux accepts the file as is.
+    [IO.File]::WriteAllText("$OutputIso.sha256", "$hash  $isoName`n", (New-Object Text.UTF8Encoding($false)))
     $manifest.outputIso = $isoName
     $manifest.outputSha256 = $hash
     $manifest.outputSizeGB = [math]::Round((Get-Item $OutputIso).Length / 1GB, 2)

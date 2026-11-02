@@ -27,9 +27,37 @@ The executable and DLL are emitted to the same runtime output directory, so the
 Windows loader can find the DLL when starting the executable. The `.lib` import
 library is used at link time.
 
-## Build in a QEMU Windows VM
+## Cross-compile for Windows with MinGW-w64 (no KVM needed)
 
-The Windows build runs in a QEMU/KVM virtual machine on a Linux host. A Packer
+The Windows build runs in Docker on the Linux host. MinGW-w64 (posix threads)
+cross-compiles the project, and the GCC runtime is linked statically, so the
+output needs no extra DLLs. A QEMU Windows VM then runs the result on real
+Windows. The VM works without KVM (software emulation, slow).
+
+```sh
+# one time: download the official Windows Server 2022 evaluation ISO
+#   (Microsoft Evaluation Center) to qemu/windows/iso/windows-server-2022.iso
+# one time: build the base image (Windows + OpenSSH only, no compiler)
+TOOLCHAIN=0 ./qemu/windows/build-image.sh
+
+# every build: Docker + CMake + Ninja + MinGW-w64 -> out/mingw/
+./docker/mingw/build.sh                 # or: build.sh Debug
+
+# test on Windows: clean VM -> copy out/mingw -> run ThreadDemo.exe
+./qemu/windows/vm.sh test
+```
+
+MinGW and MSVC use different C++ ABIs. Use `libMyLibrary.dll` only with
+programs that MinGW-w64 also builds, not with MSVC-built programs. The import
+library is `build/mingw/libMyLibrary.dll.a`, not `MyLibrary.lib`.
+
+## Optional: build with MSVC in a QEMU Windows VM
+
+> **Not verified** on the current host (no KVM). The MinGW flow above is the
+> verified path. The MSVC scripts are kept for hosts that need MSVC output
+> (for example, a DLL that MSVC-built programs link against).
+
+The MSVC build runs in a QEMU virtual machine (KVM if available, TCG otherwise) on a Linux host. A Packer
 template defines the VM: Windows Server 2022 Server Core, Visual Studio 2022 C++
 Build Tools, CMake, and OpenSSH. Git holds that recipe (`qemu/windows/`), not
 the disk image. See [`qemu/README.md`](qemu/README.md) for host setup and

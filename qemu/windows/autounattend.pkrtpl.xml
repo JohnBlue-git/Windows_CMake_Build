@@ -113,7 +113,8 @@
         <SynchronousCommand wcm:action="add">
           <Order>1</Order>
           <Description>Enable WinRM for Packer</Description>
-          <CommandLine>cmd.exe /c powershell.exe -NoProfile -ExecutionPolicy Bypass -File A:\setup-winrm.ps1</CommandLine>
+          <!-- Wait for A: (late under TCG emulation, so a plain -File A:\... can fail), log to C:\Windows\Temp. -->
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "for ($i = 0; $i -lt 120 -and -not (Test-Path A:\setup-winrm.ps1); $i++) { Start-Sleep 5 }; &amp; A:\setup-winrm.ps1 *&gt; C:\Windows\Temp\setup-winrm.log"</CommandLine>
           <RequiresUserInput>false</RequiresUserInput>
         </SynchronousCommand>
       </FirstLogonCommands>

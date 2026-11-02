@@ -35,7 +35,7 @@ flowchart LR
     end
     subgraph HOST["Linux host 192.168.11.76"]
         D -- scp --> E[qemu/windows/iso/]
-        E --> F[build-image.sh<br/>Packer + QEMU/KVM]
+        E --> F[build-image.sh<br/>Packer + QEMU, KVM or TCG]
         F --> G[output/cmake-dll-win.qcow2<br/>golden base image]
         G --> H[vm.sh build<br/>overlay per run]
         H --> I[out/windows/<br/>ThreadDemo.exe, MyLibrary.dll]

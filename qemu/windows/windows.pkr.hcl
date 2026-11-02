@@ -1,5 +1,7 @@
 // Packer template: unattended Windows Server 2022 (Server Core) install into a
-// QEMU qcow2 disk, then installs VS 2022 C++ Build Tools + CMake + OpenSSH.
+// QEMU qcow2 disk, then installs OpenSSH and (build "qemu.msvc") VS 2022 C++
+// Build Tools + CMake. Build "qemu.base" skips the toolchain: enough to run
+// MinGW builds (vm.sh test).
 // Works with the stock Microsoft ISO or with the custom ISO from iso-kit/
 // (which already installs the toolchain during Setup; the provisioner then
 // only verifies it).
@@ -81,6 +83,30 @@ variable "memory" {
   default = 8192
 }
 
+variable "accelerator" {
+  type        = string
+  default     = "kvm"
+  description = "kvm, or tcg on hosts without hardware virtualization (much slower)."
+}
+
+variable "cpu_model" {
+  type        = string
+  default     = "host"
+  description = "QEMU -cpu value. 'host' needs KVM; use 'max' with tcg."
+}
+
+variable "qemu_binary" {
+  type        = string
+  default     = "qemu-system-x86_64"
+  description = "QEMU binary; build-image.sh uses ./qemu-docker.sh (QEMU 10) for tcg."
+}
+
+variable "winrm_timeout" {
+  type        = string
+  default     = "4h"
+  description = "How long to wait for Windows Setup to finish (raise it for tcg)."
+}
+
 variable "headless" {
   type    = bool
   default = true
@@ -96,7 +122,9 @@ source "qemu" "windows" {
   disk_size        = var.disk_size
   disk_compression = true
 
-  accelerator  = "kvm"
+  qemu_binary  = var.qemu_binary
+  accelerator  = var.accelerator
+  cpu_model    = var.cpu_model
   machine_type = "pc"
   cpus         = var.cpus
   memory       = var.memory
@@ -128,7 +156,7 @@ source "qemu" "windows" {
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = var.admin_password
-  winrm_timeout  = "4h"
+  winrm_timeout  = var.winrm_timeout
   winrm_use_ssl  = false
 
   shutdown_command = "shutdown /s /t 10 /f /d p:4:1 /c \"Packer shutdown\""
@@ -136,7 +164,13 @@ source "qemu" "windows" {
 }
 
 build {
-  sources = ["source.qemu.windows"]
+  // Same VM, two variants; build-image.sh selects one with -only.
+  source "source.qemu.windows" {
+    name = "msvc"
+  }
+  source "source.qemu.windows" {
+    name = "base"
+  }
 
   provisioner "file" {
     source      = var.ssh_public_key_file
@@ -148,14 +182,17 @@ build {
   }
 
   provisioner "powershell" {
+    only    = ["qemu.msvc"]
     scripts = ["${path.root}/scripts/install-buildtools.ps1"]
   }
 
   provisioner "windows-restart" {
+    only            = ["qemu.msvc"]
     restart_timeout = "30m"
   }
 
   provisioner "powershell" {
+    only    = ["qemu.msvc"]
     scripts = ["${path.root}/scripts/verify-toolchain.ps1"]
   }
 }
