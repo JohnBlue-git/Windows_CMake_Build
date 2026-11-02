@@ -1,0 +1,11 @@
+/build/
+/out/
+
+# QEMU build VM: large / machine-specific / secret files stay out of Git
+/qemu/windows/iso/
+/qemu/windows/output/
+/qemu/windows/.run/
+/qemu/windows/keys/
+/qemu/windows/packer_cache/
+*.qcow2
+*.iso
