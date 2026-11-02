@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cross-compile CMake_DLL for Windows x64 with MinGW-w64 inside Docker.
+# Cross-compile Windows_CMake_Build for Windows x64 with MinGW-w64 inside Docker.
 # Runs on a Linux host without KVM; output goes to out/mingw/.
 #
 # Usage:

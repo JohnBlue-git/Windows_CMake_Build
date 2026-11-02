@@ -62,7 +62,7 @@
 
       <UserData>
         <AcceptEula>true</AcceptEula>
-        <FullName>CMake_DLL Builder</FullName>
+        <FullName>Windows_CMake_Build Builder</FullName>
         <Organization>Insyde</Organization>
 %{ if product_key != "" ~}
         <ProductKey>

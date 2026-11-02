@@ -63,7 +63,7 @@ flowchart TB
     subgraph HOST["Linux host"]
         VMSH["winvm/vm.sh"]
         KEY["winvm/keys/id_ed25519<br/>(ssh key, created by build-image.sh)"]
-        BASE[("winvm/output/cmake-dll-win.qcow2<br/>base image: read-only, ~3 GB")]
+        BASE[("winvm/output/cmake-dll-win.qcow2<br/>base image: never written, ~3 GB")]
         OVL[("winvm/.run/overlay.qcow2<br/>overlay: new for each run")]
         subgraph CT["Docker: cmake-dll-qemu"]
             QEMU["qemu-system-x86_64 (QEMU 10)<br/>TCG software CPU, -cpu max<br/>IDE disk + e1000 NIC (in-box drivers)"]
@@ -82,10 +82,9 @@ flowchart TB
     SSHD --> TEST
 ```
 
-Why QEMU runs in Docker: without KVM, QEMU emulates the CPU in software (TCG).
-The host's QEMU 6.2 (Ubuntu 22.04) crashes Windows under TCG; QEMU 10 does not.
-On a host **with** `/dev/kvm`, `vm.sh` uses the host's QEMU with KVM directly
-and skips the container.
+QEMU runs in Docker only on hosts without KVM, because the host's QEMU is too
+old for Windows under software emulation (see [docs/winvm.md](docs/winvm.md)).
+On a host **with** `/dev/kvm`, `vm.sh` uses the host's QEMU directly.
 
 ### What `vm.sh test` does
 
@@ -96,17 +95,23 @@ sequenceDiagram
     participant Q as QEMU (Docker)
     participant W as Windows VM
     U->>V: ./winvm/vm.sh test
-    V->>V: delete old overlay, create new overlay on the base image
-    V->>Q: start QEMU (hostfwd 127.0.0.1:2222 -> guest 22)
-    Q->>W: boot Windows
-    loop until ssh answers (up to BOOT_TIMEOUT)
-        V->>W: ssh exit 0
+    alt VM not running yet
+        V->>V: delete old overlay, create new overlay on the base image
+        V->>Q: start QEMU (hostfwd 127.0.0.1:2222 -> guest 22)
+        Q->>W: boot Windows
+        loop until ssh answers (up to BOOT_TIMEOUT)
+            V->>W: ssh exit 0
+        end
+    else VM already running (vm.sh start)
+        V->>W: reuse it
     end
     V->>W: scp test.tar (out/mingw) + guest-test.ps1
     V->>W: ssh powershell guest-test.ps1
     W-->>V: ThreadDemo.exe output and exit code
-    V->>W: Stop-Computer
-    Q-->>V: QEMU exits
+    opt vm.sh started the VM, and KEEP is not 1
+        V->>W: Stop-Computer
+        Q-->>V: QEMU exits
+    end
     V-->>U: Done (or the error, with exit code)
 ```
 
@@ -115,13 +120,16 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     ISO["winvm/iso/<br/>windows-server-2022.iso<br/>(Microsoft evaluation ISO)"]
-    subgraph PK["winvm/build-image.sh -> Packer"]
-        P1["unattended Windows Setup<br/>(packer/autounattend.pkrtpl.xml)"]
-        P2["provision/install-openssh.ps1<br/>+ host ssh public key"]
-        P1 --> P2
+    subgraph PK["build-image.sh + Packer"]
+        subgraph CT["Docker (no KVM)"]
+            P1["QEMU 10: unattended Windows Setup<br/>(packer/autounattend.pkrtpl.xml)"]
+        end
+        P2["first logon: provision/setup-winrm.ps1<br/>(from floppy A:)"]
+        P3["Packer over WinRM:<br/>provision/install-openssh.ps1<br/>+ host ssh public key"]
+        P1 --> P2 --> P3
     end
     ISO --> P1
-    P2 --> BASE[("winvm/output/<br/>cmake-dll-win.qcow2")]
+    P3 --> BASE[("winvm/output/<br/>cmake-dll-win.qcow2")]
 ```
 
 ## Optional flow: build with MSVC inside the VM
@@ -178,15 +186,11 @@ flowchart LR
 ├── winvm/                          STEP 2: Windows VM (test, or optional MSVC build)
 │   ├── vm.sh                       every run: test | build | start | ssh | stop | reset
 │   ├── build-image.sh              one time: ISO -> output/cmake-dll-win.qcow2
-│   ├── qemu-docker/                QEMU 10 in Docker, used when there is no KVM
-│   ├── packer/                     image recipe: Packer template, answer file, provision/*.ps1
-│   ├── guest/                      scripts vm.sh copies into the VM for each run
-│   ├── iso-kit/                    optional, runs on a Windows PC: custom ISO with MSVC
-│   └── iso/ output/ keys/ .run/    local only, not in Git (ISO, base image, ssh key, overlay)
+│   └── ...                         full file list: docs/winvm.md
 ├── docs/
-│   ├── winvm.md                    VM host setup, options, troubleshooting
+│   ├── winvm.md                    VM host setup, files, options
 │   └── iso-kit.md                  custom ISO step by step (Windows PC)
-├── build/, out/                    generated, not in Git
+└── build/, out/                    generated, not in Git
 ```
 
 ## Build natively (no Windows needed)

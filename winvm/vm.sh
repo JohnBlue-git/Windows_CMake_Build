@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run the Windows VM: test MinGW builds from mingw/build.sh, or build
-# CMake_DLL with MSVC inside it.
+# Windows_CMake_Build with MSVC inside it.
 #
 # The base image is never modified: the VM always runs on a copy-on-write
 # overlay (.run/overlay.qcow2) that is backed by the base image.
@@ -157,7 +157,7 @@ cmd_build() {
 
     log "Packing sources"
     tar -C "$REPO" -cf "$tmp/src.tar" \
-        --exclude=./.git --exclude=./build --exclude=./out --exclude=./mingw --exclude=./winvm --exclude=./docs \
+        --exclude=./.git --exclude=./build --exclude=./out --exclude=./winvm \
         .
 
     log "Copying sources into the VM"

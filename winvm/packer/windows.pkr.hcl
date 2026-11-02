@@ -98,7 +98,7 @@ variable "cpu_model" {
 variable "qemu_binary" {
   type        = string
   default     = "qemu-system-x86_64"
-  description = "QEMU binary; build-image.sh uses qemu-docker/qemu-docker.sh (QEMU 10) for tcg."
+  description = "QEMU binary; build-image.sh passes QEMU 10 in Docker for tcg."
 }
 
 variable "winrm_timeout" {

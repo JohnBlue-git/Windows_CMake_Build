@@ -95,7 +95,6 @@ args=(
     -var "headless=${HEADLESS:-true}"
     -var "image_index=$image_index"
     -var "accelerator=$ACCEL"
-    -var "output_dir=$HERE/output"
 )
 # Host QEMU 6.2 crashes Windows Setup under TCG; qemu-docker.sh runs QEMU 10.
 [[ "$ACCEL" == tcg ]] && args+=(-var "cpu_model=max" -var "winrm_timeout=12h"

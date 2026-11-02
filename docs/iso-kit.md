@@ -1,8 +1,9 @@
 # Custom Windows Server 2022 ISO for Windows_CMake_Build
 
-The kit lives in [`winvm/iso-kit/`](../winvm/iso-kit/). It turns the stock Windows Server 2022 ISO into a build-ready ISO for
-Windows_CMake_Build. You run it on a Windows PC with only built-in tools (DISM) plus
-`oscdimg` from the Windows ADK, similar to what NTLite does. The custom ISO
+The kit lives in [`winvm/iso-kit/`](../winvm/iso-kit/). It turns the stock
+Windows Server 2022 ISO into a build-ready ISO for Windows_CMake_Build. You run
+it on a Windows PC with only built-in tools (DISM) plus `oscdimg` from the
+Windows ADK, similar to what NTLite does. The custom ISO
 then goes to the Linux host (192.168.11.76), where Packer turns it into the
 QEMU disk image.
 
@@ -341,9 +342,9 @@ file next to your ISO matches the copy on the Linux host.
 | Artifact | Size | Store in | Why |
 |---|---|---|---|
 | This kit, Packer template, scripts | KB | **GitHub** (this repo) | Small and reviewable. They reproduce everything else. |
-| `payload.json`, `*.manifest.json` | KB | GitHub (optional, e.g. `winvm/iso/manifests/`) | Records exactly what each ISO contains |
+| `payload.json`, `*.manifest.json` | KB | GitHub (optional, e.g. `winvm/iso-kit/manifests/`) | Records exactly what each ISO contains |
 | Custom ISO + `.sha256` | ~6 GB | NAS / shared disk | Over GitHub's file limits, and contains Windows (license) |
-| `cmake-dll-win.qcow2` | ~10–15 GB | NAS / shared disk, read-only | Same reasons. `vm.sh` only reads it (`IMAGE=/nas/... ./vm.sh build`). |
+| `cmake-dll-win.qcow2` | ~10–15 GB | NAS / shared disk, read-only | Same reasons. `vm.sh` only reads it (`IMAGE=/nas/... ./winvm/vm.sh build`). |
 
 Suggested naming for releases on the NAS:
 `CMakeDLL-WS2022-<yyyymmdd>.iso` / `.qcow2`. Commit the matching

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Step 2: build a customized Windows Server 2022 ISO for CMake_DLL builds:
+    Step 2: build a customized Windows Server 2022 ISO for Windows_CMake_Build builds:
     one edition, unneeded components removed, toolchain embedded.
 
 .DESCRIPTION
